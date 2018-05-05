@@ -46,7 +46,7 @@ class Autoscaler():
 
         self.parse_arguments()
         # Start logging
-        if self.verbose:
+        if self.verbose == "debug":
             level = logging.DEBUG
         else:
             level = logging.INFO
@@ -55,48 +55,21 @@ class Autoscaler():
             level=level,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         self.log = logging.getLogger("marathon-autoscaler")
+        file_handler = logging.FileHandler('/marathon-autoscale/logs/marathon_autoscaler.log')
+        self.log.addHandler(file_handler)
+
+
         # Set auth header
         self.authenticate()
 
     def authenticate(self):
-        """Using a userid/pass or a service account secret,
-        get or renew JWT auth token
+        """Set auth token.
         Returns:
             Sets dcos_headers to be used for authentication
         """
-        # Get the certificate authority
-        if not os.path.isfile('dcos-ca.crt'):
-            response = requests.get(self.dcos_master + '/ca/dcos-ca.crt', verify=False)
-            with open("dcos-ca.crt", "wb") as crt_file:
-                crt_file.write(response.content)
-
-        if ('AS_USERID' in os.environ.keys()) and ('AS_PASSWORD' in os.environ.keys()):
-            auth_data = json.dumps({'uid' : os.environ.get('AS_USERID'),
-                                    'password' : os.environ.get('AS_PASSWORD')})
-        elif ('AS_SECRET' in os.environ.keys()) and ('AS_USERID' in os.environ.keys()):
-            # Get the private key from the autoscaler secret
-            saas = json.loads(os.environ.get('AS_SECRET'))
-            # Create a JWT token
-            jwt_token = jwt.encode({'uid': os.environ.get('AS_USERID')},
-                                   saas['private_key'], algorithm='RS256')
-            auth_data = json.dumps({"uid": os.environ.get('AS_USERID'),
-                                    "token": jwt_token.decode('utf-8')})
-        else:
-            self.dcos_headers = {'Content-type': 'application/json'}
-            return
-
-        # Create or renew auth token for the service account
-        response = requests.post(self.dcos_master + "/acs/api/v1/auth/login",
-                                 headers={"Content-type": "application/json"},
-                                 data=auth_data,
-                                 verify="dcos-ca.crt")
-        result = response.json()
-        if 'token' not in result:
-            sys.stderr.write("Unable to authenticate or renew JWT token: %s", result)
-            sys.exit(1)
 
         self.dcos_headers = {
-            'Authorization': 'token=' + result['token'],
+            'Authorization': 'token=' + self.dcos_auth_token,
             'Content-type': 'application/json'}
 
     def dcos_rest(self, method, path, data=None):
@@ -135,7 +108,7 @@ class Autoscaler():
                 content = "{}"
 
             try:
-                result = json.loads(content)
+                result = json.loads(content.decode('utf-8'))
                 return result
             except json.JSONDecodeError as dec_err:
                 done = False
@@ -359,6 +332,10 @@ class Autoscaler():
                             help=('The DNS hostname or IP of your Marathon'
                                   ' Instance'),
                             **self.env_or_req('AS_DCOS_MASTER'))
+        parser.add_argument('--dcos-auth-token',
+                            help=('The auth token for Marathon'
+                                  ' Instance'),
+                            **self.env_or_req('AS_DCOS_AUTH_TOKEN'))
         parser.add_argument('--max_mem_percent',
                             help=('The Max percent of Mem Usage averaged '
                                   'across all Application Instances to trigger'
@@ -408,8 +385,9 @@ class Autoscaler():
                             help=('Time in seconds to wait between '
                                   'checks (ie. 20)'),
                             **self.env_or_req('AS_INTERVAL'), type=int)
-        parser.add_argument('-v', '--verbose', action="store_true",
-                            help='Display DEBUG messages')
+        parser.add_argument('-v', '--verbose',
+                            help='Display DEBUG messages',
+                            **self.env_or_req('AS_LOG_LEVEL'))
         try:
             args = parser.parse_args()
         except argparse.ArgumentError as arg_err:
@@ -418,6 +396,7 @@ class Autoscaler():
             sys.exit(1)
 
         self.dcos_master = args.dcos_master
+        self.dcos_auth_token = args.dcos_auth_token
         self.max_mem_percent = float(args.max_mem_percent)
         self.min_mem_percent = float(args.min_mem_percent)
         self.max_cpu_time = float(args.max_cpu_time)
@@ -560,6 +539,9 @@ class Autoscaler():
 
             app_cpu_values = []
             app_mem_values = []
+
+            self.log.info("")
+            self.log.info("---------------------------------->")
             for task, agent in app_task_dict.items():
                 self.log.info("Inspecting task %s on agent %s",
                               task, agent)
@@ -589,6 +571,9 @@ class Autoscaler():
             #Evaluate whether an autoscale trigger is called for
             self.autoscale(app_avg_cpu, app_avg_mem)
             self.timer()
+
+            self.log.info("<----------------------------------")
+            self.log.info("")
 
 if __name__ == "__main__":
     AS = Autoscaler()
