@@ -133,124 +133,147 @@ class Autoscaler():
         if self.trigger_mode == "and":
             if ((self.min_cpu_time <= app_avg_cpu <= self.max_cpu_time)
                     and (self.min_mem_percent <= app_avg_mem <= self.max_mem_percent)):
-                self.log.info("CPU and Memory within thresholds")
+                self.log.info("STABLE: CPU and Memory within thresholds")
                 self.trigger_var = 0
                 self.cool_down = 0
             elif ((app_avg_cpu > self.max_cpu_time) and (app_avg_mem > self.max_mem_percent)
                   and (self.trigger_var >= self.trigger_number)):
-                self.log.info("Autoscale triggered based on Mem and CPU exceeding threshold")
+                self.log.info("GO UP: Autoscale triggered based on Mem and CPU exceeding threshold")
                 self.scale_app(True)
                 self.trigger_var = 0
             elif ((app_avg_cpu < self.max_cpu_time) and (app_avg_mem < self.max_mem_percent)
                   and (self.cool_down >= self.cool_down_factor)):
-                self.log.info("Autoscale triggered based on Mem and CPU below the threshold")
+                self.log.info("GO DOWN: Autoscale triggered based on Mem and CPU below the threshold")
                 self.scale_app(False)
                 self.cool_down = 0
             elif (app_avg_cpu > self.max_cpu_time) and (app_avg_mem > self.max_mem_percent):
                 self.trigger_var += 1
                 self.cool_down = 0
-                self.log.info(("Limits exceeded but waiting for trigger_number"
+                self.log.info(("WAIT UP: Limits exceeded but waiting for trigger_number"
                                " to be exceeded too to scale up %s of %s"),
                               self.trigger_var, self.trigger_number)
             elif ((app_avg_cpu < self.max_cpu_time) and (app_avg_mem < self.max_mem_percent)
                   and (self.cool_down < self.cool_down_factor)):
                 self.cool_down += 1
                 self.trigger_var = 0
-                self.log.info(("Limits are not exceeded but waiting for "
+                self.log.info(("WAIT DOWN: Limits are not exceeded but waiting for "
                                "cool_down to be exceeded too to scale "
                                "down %s of %s"),
                               self.cool_down, self.cool_down_factor)
             else:
-                self.log.info("Mem and CPU usage exceeding thresholds")
+                self.log.info("WARNING: Mem and CPU usage exceeding thresholds")
         elif self.trigger_mode == "or":
             if ((self.min_cpu_time <= app_avg_cpu <= self.max_cpu_time)
                     and (self.min_mem_percent <= app_avg_mem <= self.max_mem_percent)):
-                self.log.info("CPU or Memory within thresholds")
+                if (self.min_cpu_time <= app_avg_cpu <= self.max_cpu_time):
+                    self.log.info("STABLE: CPU within thresholds")
+                elif (self.min_mem_percent <= app_avg_mem <= self.max_mem_percent):
+                    self.log.info("STABLE: Memory within thresholds")
+
+                self.log.info("STABLE: Both CPU and Memory within thresholds")
+
                 self.trigger_var = 0
                 self.cool_down = 0
             elif (((app_avg_cpu > self.max_cpu_time) or (app_avg_mem > self.max_mem_percent))
                   and (self.trigger_var >= self.trigger_number)):
-                self.log.info("Autoscale triggered based Mem or CPU exceeding threshold")
+                if (app_avg_cpu > self.max_cpu_time):
+                    self.log.info("GO UP: Autoscale triggered based CPU exceeding threshold")
+                elif (app_avg_mem > self.max_mem_percent):
+                    self.log.info("GO UP: Autoscale triggered based Mem exceeding threshold")
+
                 self.scale_app(True)
                 self.trigger_var = 0
             elif (((app_avg_cpu < self.max_cpu_time) or (app_avg_mem < self.max_mem_percent))
                   and (self.cool_down >= self.cool_down_factor)):
-                self.log.info("Autoscale triggered based on Mem or CPU under the threshold")
+                if (app_avg_cpu < self.max_cpu_time):
+                    self.log.info("GO DOWN: Autoscale triggered based on CPU under the threshold")
+                elif (app_avg_mem < self.max_mem_percent):
+                    self.log.info("GO DOWN: Autoscale triggered based on Mem under the threshold")
                 self.scale_app(False)
                 self.cool_down = 0
             elif (app_avg_cpu > self.max_cpu_time) or (app_avg_mem > self.max_mem_percent):
                 self.trigger_var += 1
                 self.cool_down = 0
-                self.log.info(("Mem or CPU limits exceeded but waiting for "
+                if (app_avg_cpu > self.max_cpu_time):
+                    self.log.info(("WAIT UP: CPU limits exceeded but waiting for "
+                               "trigger_number to be exceeded too to scale up %s of %s"),
+                              self.trigger_var, self.trigger_number)
+                elif (app_avg_mem > self.max_mem_percent):
+                    self.log.info(("WAIT UP: Mem limits exceeded but waiting for "
                                "trigger_number to be exceeded too to scale up %s of %s"),
                               self.trigger_var, self.trigger_number)
             elif (app_avg_cpu < self.max_cpu_time) or (app_avg_mem < self.max_mem_percent):
                 self.cool_down += 1
                 self.trigger_var = 0
-                self.log.info(("Mem or CPU limits are not exceeded but waiting for "
+                if (app_avg_cpu < self.max_cpu_time):
+                    self.log.info(("WAIT DOWN: CPU limits are not exceeded but waiting for "
+                               "cool_down to be exceeded too to scale down %s of %s"),
+                              self.cool_down, self.cool_down_factor)
+                elif (app_avg_mem < self.max_mem_percent):
+                    self.log.info(("WAIT DOWN: Mem limits are not exceeded but waiting for "
                                "cool_down to be exceeded too to scale down %s of %s"),
                               self.cool_down, self.cool_down_factor)
             else:
-                self.log.info("Mem or CPU usage not exceeding thresholds")
+                self.log.info("STABLE: Mem or CPU usage not exceeding thresholds")
         elif self.trigger_mode == "cpu":
             if self.min_cpu_time <= app_avg_cpu <= self.max_cpu_time:
-                self.log.info("CPU within thresholds")
+                self.log.info("STABLE: CPU within thresholds")
                 self.trigger_var = 0
                 self.cool_down = 0
             elif (app_avg_cpu > self.max_cpu_time) and (self.trigger_var >= self.trigger_number):
-                self.log.info("Autoscale triggered based on CPU exceeding threshold")
+                self.log.info("GO UP: Autoscale triggered based on CPU exceeding threshold")
                 self.scale_app(True)
                 self.trigger_var = 0
             elif (app_avg_cpu < self.max_cpu_time) and (self.cool_down >= self.cool_down_factor):
-                self.log.info("Autoscale triggered based on CPU under the threshold")
+                self.log.info("GO DOWN: Autoscale triggered based on CPU under the threshold")
                 self.scale_app(False)
                 self.cool_down = 0
             elif app_avg_cpu > self.max_cpu_time:
                 self.trigger_var += 1
                 self.cool_down = 0
-                self.log.info(("CPU limits exceeded but waiting for "
+                self.log.info(("WAIT UP: CPU limits exceeded but waiting for "
                                "trigger_number to be exceeded too to scale "
                                "up %s of %s"),
                               self.trigger_var, self.trigger_number)
             elif app_avg_cpu < self.max_cpu_time:
                 self.cool_down += 1
                 self.trigger_var = 0
-                self.log.info(("CPU limits are not exceeded but waiting for "
+                self.log.info(("WAIT DOWN: CPU limits are not exceeded but waiting for "
                                "cool_down to be exceeded too to scale down %s of %s"),
                               self.cool_down, self.cool_down_factor)
             else:
-                self.log.info("CPU usage not exceeding threshold")
+                self.log.info("STABLE: CPU usage not exceeding threshold")
         elif self.trigger_mode == "mem":
             if self.min_mem_percent <= app_avg_mem <= self.max_mem_percent:
-                self.log.info("Memory within thresholds")
+                self.log.info("STABLE: Memory within thresholds")
                 self.trigger_var = 0
                 self.cool_down = 0
             elif ((app_avg_mem > self.max_mem_percent) and
                   (self.trigger_var >= self.trigger_number)):
-                self.log.info("Autoscale triggered based Mem exceeding threshold")
+                self.log.info("GO UP: Autoscale triggered based Mem exceeding threshold")
                 self.scale_app(True)
                 self.trigger_var = 0
             elif ((app_avg_mem < self.max_mem_percent) and
                   (self.cool_down >= self.cool_down_factor)):
-                self.log.info("Autoscale triggered based on Mem below the threshold")
+                self.log.info("GO DOWN: Autoscale triggered based on Mem below the threshold")
                 self.scale_app(False)
                 self.cool_down = 0
             elif app_avg_mem > self.max_mem_percent:
                 self.trigger_var += 1
                 self.cool_down = 0
-                self.log.info(("Mem limits exceeded but waiting for "
+                self.log.info(("WAIT UP: Mem limits exceeded but waiting for "
                                "trigger_number to be exceeded too to scale "
                                "up %s of %s"),
                               self.trigger_var, self.trigger_number)
             elif app_avg_mem < self.max_mem_percent:
                 self.cool_down += 1
                 self.trigger_var = 0
-                self.log.info(("Mem limits are not exceeded but waiting for "
+                self.log.info(("WAIT DOWN: Mem limits are not exceeded but waiting for "
                                "cool_down to be exceeded too to scale down"
                                " %s of %s"),
                               self.cool_down, self.cool_down_factor)
             else:
-                self.log.info("Mem usage not exceeding threshold")
+                self.log.info("STABLE: Mem usage not exceeding threshold")
 
 
     def scale_app(self, is_up):
@@ -261,14 +284,15 @@ class Autoscaler():
         if is_up:
             target_instances = math.ceil(self.app_instances * self.autoscale_multiplier)
             if target_instances > self.max_instances:
-                self.log.info("Reached the set maximum of instances %s", self.max_instances)
+                self.log.info("WARNING: Reached the set maximum of instances %s", self.max_instances)
                 target_instances = self.max_instances
+            self.log.info("GO UP: We have %s instance and scaling UP to %s instances.", self.app_instances, target_instances)
         else:
             target_instances = math.ceil(self.app_instances / self.autoscale_multiplier)
             if target_instances < self.min_instances:
-                self.log.info("Reached the set minimum of instances %s", self.min_instances)
+                self.log.info("WARNING: Reached the set minimum of instances %s", self.min_instances)
                 target_instances = self.min_instances
-
+            self.log.info("GO DOWN: We have %s instance and scaling DOWN to %s instances.", self.app_instances, target_instances)
         self.log.debug("scale_app: app_instances %s target_instances %s",
                        self.app_instances, target_instances)
         if self.app_instances != target_instances:
@@ -280,6 +304,8 @@ class Autoscaler():
             #self.log.debug("scale_app returned status code %s", response.status_code)
             # self.app_instances will be updated next time get_app_details is called
             self.log.debug("scale_app %s", response)
+        else:
+            self.log.info("STABLE: We have %s instance and target is %s instances. Do nothing.", self.app_instances, target_instances)
 
     def get_app_details(self):
         """Retrieve metadata about marathon_app
@@ -562,11 +588,26 @@ class Autoscaler():
 
             # Normalized data for all tasks into a single value by averaging
             app_avg_cpu = (sum(app_cpu_values) / len(app_cpu_values))
+            self.log.info("")
             self.log.info("Current average CPU time for app %s = %s",
                           self.marathon_app, app_avg_cpu)
+            self.log.info("CPU Target => Min: %s | Max: %s", self.min_cpu_time, self.max_cpu_time)
+            self.log.info("")
+
             app_avg_mem = (sum(app_mem_values) / len(app_mem_values))
             self.log.info("Current Average Mem Utilization for app %s = %s",
                           self.marathon_app, app_avg_mem)
+            self.log.info("Mem Target => Min: %s | Max: %s", self.min_mem_percent, self.max_mem_percent)
+            self.log.info("")
+
+            self.log.info("Instance Target => Min: %s | Max: %s", self.min_instances, self.max_instances)
+            self.log.info("")
+
+            self.log.info("Trigger Mode: %s | Multiplier: %s | Interval: %s seconds.",
+                self.trigger_mode, self.autoscale_multiplier, self.interval)
+            self.log.info("Cool Down Factor: %s", self.cool_down_factor)
+            self.log.info("Trigger Number: %s", self.trigger_number)
+            self.log.info("")
 
             #Evaluate whether an autoscale trigger is called for
             self.autoscale(app_avg_cpu, app_avg_mem)
